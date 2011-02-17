@@ -1,0 +1,27 @@
+project(chart_parser)
+cmake_minimum_required(VERSION 2.6)
+
+find_package(Boost REQUIRED)
+include_directories(${Boost_INCLUDE_DIRS})
+
+file(GLOB SRC "src/*.cpp")
+#message(STATUS ${SRC})
+#message(STATUS "Removing..."${CMAKE_CURRENT_SOURCE_DIR}/src/parser.cpp)
+remove(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/parser.cpp)
+#message(STATUS ${SRC})
+include_directories(src)
+add_executable(parser "src/parser.cpp" ${SRC})
+
+include_directories(unittestcpp)
+include_directories(tests)
+file(GLOB UNITTESTCPP_SRC "unittestcpp/*.cpp")
+if(WIN32)
+    set(PLAT_SRC "unittestcpp/Win32/TimeHelpers.cpp")
+endif(WIN32)
+if(UNIX)
+    set(PLAT_SRC "unittestcpp/Posix/TimeHelpers.cpp"
+                 "unittestcpp/Posix/SignalTranslator.cpp")
+endif(UNIX)
+file(GLOB TEST_SRC "tests/*.cpp")
+add_executable(test_parser ${SRC} ${UNITTESTCPP_SRC} ${PLAT_SRC} ${TEST_SRC})
+add_custom_command(TARGET test_parser POST_BUILD COMMAND ./test_parser)

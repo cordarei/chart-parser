@@ -1,0 +1,349 @@
+\documentclass[11pt,a4paper]{jsarticle}
+
+\setlength{\textwidth}{\fullwidth}
+\setlength{\textheight}{40\baselineskip}
+\addtolength{\textheight}{\topskip}
+\setlength{\voffset}{-0.2in}
+\setlength{\headheight}{0pt}
+\setlength{\headsep}{0pt}
+
+% meta/heading info
+\title{計算言語学\\最終課題}
+\author{JOSEPH HOWARD IRWIN\\1051134}
+\date{2010年12月10日}
+
+% content
+\begin{document}
+\maketitle
+
+
+\section*{概要}
+
+課題１を選択し下降型Chartパーザを実装した．アルゴリズムはEarleyアルゴリズムを
+使用した．デフォルトの文法では名詞句に前置詞句が入る文は解析できないが，
+規則を一つ追加すれば解析できるようになる．同時に文の後ろに前置詞句があるような
+文については構造的な曖昧性が出てくる．パーザはすべての可能な木を返すようになっている．
+
+\section*{構文解析結果}
+
+\paragraph{解析できる例}
+\begin{quote}
+the smart boy hits the dog with a long rod
+\end{quote}
+
+\paragraph{解析できない例}
+\begin{quote}
+the smart boy with the rod hits a dog
+\end{quote}
+上記のように前置詞句が名詞句についている文はそのままの文法では解析できない．
+
+
+\section*{文法の拡張}
+文法に一つの規則を追加すれば上記の文が解析できるようになる：
+\begin{quote}
+np $\rightarrow$ np pp
+\end{quote}
+
+
+\section*{パーザの出力例}
+\begin{verbatim}
+
+Input: the boy hits the dog with a long rod
+# parses: 1
+($sentence
+ ($np
+  ($det 'the')
+  ($noun 'boy')
+ )
+ ($vp
+  ($vp
+   ($verb 'hits')
+   ($np
+    ($det 'the')
+    ($noun 'dog')
+   )
+  )
+  ($pp
+   ($prep 'with')
+   ($np
+    ($det 'a')
+    ($adj 'long')
+    ($noun 'rod')
+   )
+  )
+ )
+)
+
+\end{verbatim}
+
+\section*{パーザのソースコード}
+{\small %set font size
+\begin{verbatim}
+"chart.h"
+namespace jhi {
+    /**
+     * encapsulates a constituent in a parse tree
+     */
+    class constituent {
+        public:
+            constituent(int start, int end, std::string head)
+            constituent(int start, int end, std::string head, child_vector_type const& children)
+
+            std::string head() const;
+            std::vector<boost::shared_ptr<jhi::constituent> > const& children() const;
+            int start() const;
+            int end() const;
+    };
+    typedef boost::shared_ptr<constituent> constituent_ptr;
+    typedef std::vector<constituent_ptr> constituent_vector;
+
+    /**
+     * prints the given constituent tree to the standard output
+     */
+    inline void print_constituent(constituent_ptr c, std::string indent = "");
+
+    /**
+     * encapsulates an arc in the parse chart
+     *
+     * contains a rule to apply, and the constituents currently built
+     */
+    class arc {
+        public:
+            arc(int start, int end, jhi::rule const& r)
+            arc(int start, int end, boost::shared_ptr<jhi::constituent> c, jhi::rule const& r)
+
+            bool complete() const;
+
+            constituent_ptr constituent() const;
+            jhi::rule const& rule() const;
+            int start() const;
+            int end() const;
+            std::string next_symbol() const;
+
+            /**
+             * return true if the given arc matches this arc
+             *
+             * two arcs match if they apply the same rule over the same span
+             */
+            bool matches(boost::shared_ptr<arc> other);
+
+            /**
+             * create a new arc by extending this arc with the given constituent
+             */
+            boost::shared_ptr<arc> extend(boost::shared_ptr<jhi::constituent> c);
+    };
+
+    /**
+     * runs Earley algorithm using the given grammar and input
+     *
+     * verbose -- optionally dump state of chart after each step
+     */
+    constituent_vector earley(
+            jhi::grammar const& g,
+            std::string const& start_symbol,
+            std::vector<std::string> input,
+            bool verbose=false);
+
+}//namespace jhi
+
+"grammar.h"
+namespace jhi {
+    /**
+     * class rule
+     *
+     * encapsulates a rule in the grammar
+     * (allows up to three symbols on the right-hand side)
+     */
+    class rule {
+        public:
+        rule(std::string const& head, std::string const& child)
+        rule(std::string const& head, std::string const& child1, std::string const& child2)
+        rule(std::string const& head, std::string const& child1,
+            std::string const& child2, std::string const& child3)
+
+        std::string const& head() const;
+        std::vector<std::string> const& rhs() const;
+
+        /**
+         * return true if this rule takes a terminal (lexical token) on the right side
+         */
+        bool is_pos() const;
+
+        friend bool operator==(rule const& left, rule const& right);
+
+        friend std::ostream& operator<<(std::ostream& out, rule const& r);
+    };
+
+    /**
+     * class grammar
+     *
+     * contains rules and allows searching for rules with a given lhs symbol
+     */
+    class grammar {
+        public:
+        grammar(std::vector<rule> const& rules);
+
+        /**
+         * get rules that create the given symbol
+         */
+        std::vector<rule> rules_with_head(std::string const& head) const;
+    };
+
+    inline std::vector<rule> get_default_rules()
+    {
+        std::vector<rule> rules;
+
+        rules.push_back(rule("$sentence", "$np", "$vp"));
+        rules.push_back(rule("$np", "$det", "$noun"));
+        rules.push_back(rule("$np", "$det", "$adj", "$noun"));
+        //uncomment next line to allow noun phrase pps
+        //rules.push_back(rule("$np", "$np", "$pp"));
+        rules.push_back(rule("$vp", "$verb", "$np"));
+        rules.push_back(rule("$vp", "$vp", "$pp"));
+        rules.push_back(rule("$pp", "$prep", "$np"));
+        rules.push_back(rule("$det", "the"));
+        rules.push_back(rule("$det", "a"));
+        rules.push_back(rule("$noun", "boy"));
+        rules.push_back(rule("$noun", "dog"));
+        rules.push_back(rule("$noun", "rod"));
+        rules.push_back(rule("$adj", "smart"));
+        rules.push_back(rule("$adj", "long"));
+        rules.push_back(rule("$verb", "hits"));
+        rules.push_back(rule("$prep", "with"));
+
+        return rules;
+    }
+
+}
+
+"earley.cpp"
+namespace {
+
+    typedef boost::shared_ptr<jhi::arc> arc_ptr;
+    typedef std::vector<arc_ptr> chart_cell_type;
+    typedef std::vector<chart_cell_type> chart_type;
+
+    /**
+     * pretty print the chart
+     */
+    void print_chart(chart_type &chart);
+
+    /**
+     * add arc to chart
+     *
+     * adds arc only if the new arc doesn't match any arc already in the chart
+     */
+    void add_to_chart(chart_type &chart, arc_ptr arc);
+}
+
+namespace jhi {
+    /**
+     * earley
+     *
+     * runs Earley algorithm using the given grammar and input
+     *
+     * verbose -- optionally dump state of chart after each step
+     */
+    constituent_vector earley(
+            jhi::grammar const& g,
+            std::string const& start_symbol,
+            std::vector<std::string> input,
+            bool verbose)
+    {
+        typedef boost::shared_ptr<jhi::arc> arc_ptr;
+        typedef std::vector<arc_ptr> chart_cell_type;
+        typedef std::vector<chart_cell_type> chart_type;
+        chart_type chart(input.size() + 1);
+
+        //init chart
+        std::vector<jhi::rule> s_rules(g.rules_with_head(start_symbol));
+        for(int i = 0; i < s_rules.size(); ++i)
+            chart[0].push_back(arc_ptr(new arc(0, 0, s_rules[i])));
+
+        //fill chart
+        for(int i = 0; i < chart.size(); ++i) {
+            for(int j = 0; j < chart[i].size(); ++j) {
+                if (verbose) print_chart(chart);
+                arc_ptr a = chart[i][j];
+                if (a->complete()) {
+                    chart_cell_type cell = chart[a->start()];
+                    chart_cell_type::iterator k = chart[a->start()].begin();
+                    for( ; k != chart[a->start()].end(); ++k ) {
+                        //extend incomplete arcs that match current constituent
+                        if (!(*k)->complete() && (*k)->next_symbol() == a->constituent()->head()) {
+                            add_to_chart(chart, (*k)->extend(a->constituent()));
+                        }
+                    }
+                } else {
+                    std::vector<jhi::rule> new_rules(g.rules_with_head(a->next_symbol()));
+
+                    typedef std::vector<jhi::rule>::iterator rule_iter;
+                    for(rule_iter k = new_rules.begin(); k != new_rules.end(); ++k) {
+                        add_to_chart(chart, arc_ptr(new arc(i, i, *k)));
+                        if (k->is_pos()) { //for rules that take terminals
+                            //add arc if rule matches word at current position
+                            if (i < input.size() && input[i] == k->rhs().front()) {
+                                //create child constituent for word itself
+                                constituent_ptr word(new constituent(i, i+1, input[i]));
+                                constituent_vector v; v.push_back(word);
+                                //then add arc to complete the POS rule
+                                add_to_chart(chart,
+                                        arc_ptr(new arc(i,
+                                                i+1,
+                                                boost::shared_ptr<jhi::constituent>(
+                                                    new constituent(i, i+1, k->head(), v)
+                                                ),
+                                                *k)));
+                            }
+                        }//if(k->is_pos())
+                    }//for k
+                }//else
+            }//for j
+        }//for i
+
+
+        //gather successful parse trees
+        std::vector<boost::shared_ptr<jhi::constituent> > parses;
+        for(int i = 0; i < chart.back().size(); ++i) {
+            if (chart.back()[i]->complete()
+                && start_symbol == chart.back()[i]->constituent()->head()) {
+                parses.push_back(chart.back()[i]->constituent());
+            }
+        }
+        return parses;
+
+    }//earley
+}
+
+"parser.cpp"
+/**
+ * parser - executable runs the Earley chart parsing algorithm on its input
+ *
+ * input: accepts a sentence as input, with one token on each line
+ * output: outputs all parse trees found
+ */
+int main()
+{
+    std::vector<std::string> input;
+    std::string line;
+    //read input; 1 token per line
+    while(std::getline(std::cin, line)) {
+        input.push_back(line);
+    }
+    std::cout << "Input: ";
+    std::for_each(input.begin(), input.end(), std::cout << boost::lambda::_1 << " ");
+    std::cout << std::endl;
+
+    //run Earley algorithm
+    jhi::constituent_vector parses
+        = jhi::earley(jhi::grammar(jhi::get_default_rules()), "$sentence", input);
+    std::cout << "# parses: " << parses.size() << std::endl;
+    //dump parse trees
+    for(int i = 0; i < parses.size(); ++i)
+        jhi::print_constituent(parses[i]);
+    return 0;
+}
+\end{verbatim}
+}%block for font
+
+\end{document}
