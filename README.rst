@@ -64,6 +64,15 @@ Requirements:
 * Boost C++ libraries (shared_ptr, lambda)
 * CMake
 
+License
+--------
+
+Released under the `Boost Software License, Version 1.0 <http://www.boost.org/LICENSE_1_0.txt>`.
+
+`UnitTest++ <http://unittest-cpp.sourceforge.net/>` is copyright its
+authors, and included under the terms of the MIT License (see
+`unittestcpp/COPYING`).
+
 References
 -----------
 James Allen. Natural Language Understanding. Chapter 3. The Benjamin/Cummings Publishing Company, 1995.

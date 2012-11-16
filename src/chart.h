@@ -1,3 +1,7 @@
+//      Copyright Joseph Irwin <joseph.irwin.gt@gmail.com>
+// Distributed under the Boost Software License, Version 1.0.
+//            http://www.boost.org/LICENSE_1_0.txt
+
 #ifndef __PARSER__CHART_H__
 #define __PARSER__CHART_H__
 #include "boost/shared_ptr.hpp"
